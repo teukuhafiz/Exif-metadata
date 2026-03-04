@@ -1,0 +1,1705 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Universal Document & Image Metadata Inspector</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root{--bg:#0f1720;--card:#0b1220;--muted:#9aa6b2;--accent:#00bcd4;--warn:#f59e0b;--danger:#ef4444;--success:#22c55e}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;color:#e6eef6;background:linear-gradient(180deg,#071125 0%, #071a2b 100%)}
+    .wrap{max-width:1200px;margin:36px auto;padding:24px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,.6)}
+    header{display:flex;align-items:center;gap:16px}
+    header img{width:52px;height:52px;border-radius:8px;object-fit:cover}
+    header h1{margin:0;font-size:20px}
+    header p{margin:0;color:var(--muted);font-size:13px}
+    .top-actions{display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap}
+    .drop{flex:1;min-width:280px;border:2px dashed rgba(255,255,255,0.08);padding:18px;border-radius:10px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .2s}
+    .drop:hover{border-color:rgba(255,255,255,0.2)}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button{background:var(--accent);border:none;color:#001620;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer;transition:opacity .2s}
+    button:hover{opacity:.9}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(255,255,255,0.15)}
+    button.warn{background:var(--warn);color:#000}
+    button.danger{background:var(--danger);color:#fff}
+    .tabs{display:flex;gap:4px;margin-top:18px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;flex-wrap:wrap}
+    .tab{padding:8px 16px;border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.03);border:none;color:var(--muted);font-size:13px;margin-bottom:4px}
+    .tab.active{background:rgba(0,188,212,0.15);color:var(--accent);font-weight:600}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    main{display:grid;grid-template-columns:1fr 420px;gap:18px;margin-top:18px}
+    .meta, .mapcard{background:var(--card);padding:14px;border-radius:10px;min-height:220px}
+    .section-title{font-size:14px;font-weight:600;color:var(--accent);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    td{padding:8px;border-bottom:1px dashed rgba(255,255,255,0.06);vertical-align:top}
+    td.key{width:180px;color:var(--muted);font-weight:600}
+    td.value{word-break:break-word;max-width:300px}
+    .tag-group{margin-bottom:16px}
+    .tag-group-title{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;padding:4px 8px;background:rgba(0,188,212,0.1);border-radius:4px}
+    .all-tags{max-height:400px;overflow-y:auto;font-size:12px}
+    .all-tags table td{padding:4px 8px}
+    .all-tags .tag-name{color:#7dd3fc;font-family:monospace}
+    .all-tags .tag-value{color:#e6eef6;word-break:break-all}
+    #map{height:420px;border-radius:8px}
+    .small{font-size:13px;color:var(--muted)}
+    .warning{color:var(--warn);font-size:12px}
+    .danger{color:var(--danger);font-size:12px}
+    .success{color:var(--success);font-size:12px}
+    footer{margin-top:16px;color:var(--muted);font-size:13px}
+    a.brand{color:var(--accent);text-decoration:none;font-weight:700}
+    .preview{display:flex;align-items:center;gap:10px;margin-top:8px}
+    .preview img{max-height:52px;border-radius:6px}
+    .dim{opacity:.8}
+    .file-info{background:rgba(255,255,255,0.03);padding:12px;border-radius:8px;margin-bottom:16px}
+    .file-info-row{display:flex;gap:16px;flex-wrap:wrap;font-size:13px}
+    .file-info-item{flex:1;min-width:200px}
+    .file-info-label{color:var(--muted);font-size:11px;text-transform:uppercase}
+    .file-info-value{font-weight:600}
+    .history-list{font-size:12px}
+    .history-item{padding:6px 8px;background:rgba(255,255,255,0.03);border-radius:4px;margin-bottom:4px;border-left:3px solid var(--accent)}
+    .doc-type-badge{display:inline-block;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;background:var(--accent);color:#001620}
+    .metadata-section{margin-bottom:20px}
+    @media (max-width:900px){main{grid-template-columns:1fr;}.mapcard{order:2}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img id="brandImg" src="https://avatars.githubusercontent.com/u/9919" alt="profile" referrerpolicy="no-referrer">
+      <div>
+        <h1>Universal Document & Image Metadata Inspector</h1>
+        <p class="small">Extract metadata from Images, PDFs, Office documents (Word, Excel, PowerPoint), and more. Detect creation dates, edit history, authors, GPS, and software trails.</p>
+      </div>
+    </header>
+
+    <div class="top-actions">
+      <div class="drop" id="drop">
+        <div>Drag & drop file here</div>
+        <div class="small" style="margin-top:6px;">Images: JPG, PNG, TIFF, HEIC, WebP, GIF, BMP | Documents: PDF, DOCX, XLSX, PPTX, ODT, ODS, ODP | Data: CSV, TXT</div>
+        <input type="file" id="file" accept="image/*,.heic,.heif,.pdf,.docx,.doc,.xlsx,.xls,.pptx,.ppt,.odt,.ods,.odp,.csv,.txt" style="display:none">
+      </div>
+      <div class="controls">
+        <button id="fetch-url">Fetch URL</button>
+        <input type="text" id="url" placeholder="https://example.com/file.jpg" style="padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:#e6eef6;width:220px">
+        <button id="download-json" class="ghost">Export JSON</button>
+        <button id="clear" class="ghost">Clear</button>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-tab="summary">Summary</button>
+      <button class="tab" data-tab="fileinfo">File Info</button>
+      <button class="tab" data-tab="camera">Camera/Origin</button>
+      <button class="tab" data-tab="datetime">Date/Time</button>
+      <button class="tab" data-tab="software">Software History</button>
+      <button class="tab" data-tab="author">Author/Copyright</button>
+      <button class="tab" data-tab="alltags">All Metadata</button>
+    </div>
+
+    <main>
+      <div class="meta" id="meta-panel">
+        <!-- Summary Tab -->
+        <div class="tab-content active" id="tab-summary">
+          <div class="section-title">Document Summary <span id="doc-type" class="doc-type-badge" style="display:none"></span></div>
+          <table id="summary-table">
+            <tbody>
+              <tr><td class="key">Status</td><td>Waiting for file</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- File Info Tab -->
+        <div class="tab-content" id="tab-fileinfo">
+          <div class="section-title">File System Information</div>
+          <div class="file-info" id="file-info-panel">
+            <div class="file-info-row">
+              <div class="file-info-item">
+                <div class="file-info-label">File Name</div>
+                <div class="file-info-value" id="fi-name">—</div>
+              </div>
+              <div class="file-info-item">
+                <div class="file-info-label">File Size</div>
+                <div class="file-info-value" id="fi-size">—</div>
+              </div>
+            </div>
+            <div class="file-info-row" style="margin-top:12px">
+              <div class="file-info-item">
+                <div class="file-info-label">File Type (MIME)</div>
+                <div class="file-info-value" id="fi-type">—</div>
+              </div>
+              <div class="file-info-item">
+                <div class="file-info-label">Last Modified</div>
+                <div class="file-info-value" id="fi-modified">—</div>
+              </div>
+            </div>
+            <div class="file-info-row" style="margin-top:12px">
+              <div class="file-info-item">
+                <div class="file-info-label">Folder/Path Hint</div>
+                <div class="file-info-value" id="fi-path">—</div>
+              </div>
+              <div class="file-info-item">
+                <div class="file-info-label">File Extension</div>
+                <div class="file-info-value" id="fi-ext">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="section-title" style="margin-top:16px">Document Properties</div>
+          <table id="image-props-table">
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Camera/Origin Tab -->
+        <div class="tab-content" id="tab-camera">
+          <div class="section-title">Device/Origin Information</div>
+          <table id="camera-table">
+            <tbody></tbody>
+          </table>
+          <div class="section-title" style="margin-top:16px">Application/Software Origin</div>
+          <table id="lens-table">
+            <tbody></tbody>
+          </table>
+          <div class="section-title" style="margin-top:16px">Technical Properties</div>
+          <table id="shooting-table">
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Date/Time Tab -->
+        <div class="tab-content" id="tab-datetime">
+          <div class="section-title">Date & Time Information</div>
+          <table id="datetime-table">
+            <tbody></tbody>
+          </table>
+          <div class="section-title" style="margin-top:16px">Timezone Analysis</div>
+          <div class="file-info">
+            <div class="small" id="timezone-analysis">Upload a file to analyze timestamp patterns and timezone information.</div>
+          </div>
+          <div class="section-title" style="margin-top:16px">Timeline</div>
+          <div class="file-info" id="timeline-container">
+            <div class="small">Upload a file to see chronological events.</div>
+          </div>
+        </div>
+
+        <!-- Software Tab -->
+        <div class="tab-content" id="tab-software">
+          <div class="section-title">Software Processing History</div>
+          <div class="history-list" id="software-history">
+            <div class="small">No software history detected yet.</div>
+          </div>
+          <div class="section-title" style="margin-top:16px">Processing Details</div>
+          <table id="software-table">
+            <tbody></tbody>
+          </table>
+          <div class="section-title" style="margin-top:16px">Version Information</div>
+          <table id="version-table">
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Author Tab -->
+        <div class="tab-content" id="tab-author">
+          <div class="section-title">Author & Copyright</div>
+          <table id="author-table">
+            <tbody></tbody>
+          </table>
+          <div class="section-title" style="margin-top:16px">Contact Information</div>
+          <table id="contact-table">
+            <tbody></tbody>
+          </table>
+          <div class="section-title" style="margin-top:16px">Rights & Usage</div>
+          <table id="rights-table">
+            <tbody></tbody>
+          </table>
+          <div class="section-title" style="margin-top:16px">Organizational Info</div>
+          <table id="org-table">
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- All Tags Tab -->
+        <div class="tab-content" id="tab-alltags">
+          <div class="section-title">Complete Metadata Dump</div>
+          <div class="all-tags" id="all-tags-container">
+            <div class="small">Upload a file to see all metadata.</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="mapcard">
+        <div class="section-title">GPS Location</div>
+        <div id="map"></div>
+        <p class="small" style="margin-top:10px">Lat: <span id="lat">—</span> &nbsp;|&nbsp; Lon: <span id="lon">—</span></p>
+        <p class="small">Address: <span id="addr">—</span></p>
+        <p class="small">Google Maps: <a id="gmaps" class="brand" href="#" target="_blank">open</a> • Copy: <button id="copy-coords" class="ghost" style="margin-left:8px;padding:6px 10px;font-size:12px">Copy</button></p>
+        <div class="preview" id="preview-container" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
+          <img id="preview-img" src="" alt="preview" style="display:none">
+          <div>
+            <div class="small" id="preview-dims">—</div>
+            <div class="small" style="color:var(--muted)" id="preview-format">—</div>
+            <div class="small" style="color:var(--accent)" id="preview-type">—</div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08)">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:space-between">
+        <div class="small">Universal metadata inspector. Supports: Images (EXIF), PDFs, Office (DOCX/XLSX/PPTX), OpenDocument (ODT/ODS/ODP). Client-side processing only.</div>
+        <div class="small" id="status" style="color:var(--accent);font-weight:600">Waiting for file</div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/heic2any/dist/heic2any.min.js"></script>
+  <script>
+    // Elements
+    const fileEl = document.getElementById('file');
+    const drop = document.getElementById('drop');
+    const statusEl = document.getElementById('status');
+    const latEl = document.getElementById('lat');
+    const lonEl = document.getElementById('lon');
+    const addrEl = document.getElementById('addr');
+    const gmaps = document.getElementById('gmaps');
+    const copyBtn = document.getElementById('copy-coords');
+    const downloadJsonBtn = document.getElementById('download-json');
+    const clearBtn = document.getElementById('clear');
+    const urlInput = document.getElementById('url');
+    const fetchBtn = document.getElementById('fetch-url');
+    const previewImg = document.getElementById('preview-img');
+    const previewDims = document.getElementById('preview-dims');
+    const previewFormat = document.getElementById('preview-format');
+    const previewType = document.getElementById('preview-type');
+    const allTagsContainer = document.getElementById('all-tags-container');
+    const docTypeBadge = document.getElementById('doc-type');
+
+    // Map
+    const map = L.map('map', {attributionControl:false}).setView([0,0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    const marker = L.marker([0,0]).addTo(map);
+
+    let currentExif = null;
+    let currentCoords = null;
+    let currentFile = null;
+    let currentImageData = null;
+    let currentMetadata = null;
+    let fileType = null;
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Helpers
+    function toFloat(x){
+      if (x==null) return null;
+      if (typeof x === 'number') return x;
+      if (typeof x === 'object' && 'numerator' in x && 'denominator' in x) return x.numerator / (x.denominator||1);
+      return Number(x);
+    }
+    function dmsArrayToDeg(arr){ if(!arr) return null; const [a,b,c]=arr.map(toFloat); return (a||0) + (b||0)/60 + (c||0)/3600; }
+    function toDecimal(coord, ref){ const d=dmsArrayToDeg(coord); if(d==null||isNaN(d)) return null; return (ref==='S'||ref==='W') ? -d : d; }
+    function setStatus(text){ statusEl.textContent = text; }
+    function formatBytes(bytes){ if(bytes==null) return '—'; const sizes=['Bytes','KB','MB','GB']; if(bytes===0) return '0 Bytes'; const i=Math.floor(Math.log(bytes)/Math.log(1024)); return Math.round(bytes/Math.pow(1024,i)*100)/100+' '+sizes[i]; }
+    function formatDate(date){ if(!date) return '—'; try{ return new Date(date).toLocaleString(); }catch(e){ return String(date); } }
+    function escapeHtml(text){ if(text==null) return ''; return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function getFileExtension(filename){ return filename.split('.').pop().toLowerCase(); }
+
+    // Get file path info from File object
+    function getFilePathInfo(file){
+      const path = file.webkitRelativePath || file.name;
+      const folder = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : 'Root/Current Folder';
+      return { path, folder, name: file.name, ext: getFileExtension(file.name) };
+    }
+
+    // Detect file type category
+    function detectFileType(file){
+      const ext = getFileExtension(file.name);
+      const mime = file.type || '';
+      
+      if(mime.startsWith('image/') || ['jpg','jpeg','png','gif','bmp','tiff','tif','webp','heic','heif','raw','cr2','nef','arw'].includes(ext)) return 'image';
+      if(ext === 'pdf' || mime === 'application/pdf') return 'pdf';
+      if(ext === 'csv' || mime === 'text/csv') return 'csv';
+      if(ext === 'txt' || mime === 'text/plain') return 'text';
+      if(['docx','doc'].includes(ext) || mime.includes('word')) return 'word';
+      if(['xlsx','xls'].includes(ext) || mime.includes('excel') || mime.includes('spreadsheet')) return 'excel';
+      if(['pptx','ppt'].includes(ext) || mime.includes('powerpoint') || mime.includes('presentation')) return 'powerpoint';
+      if(['odt','ods','odp'].includes(ext)) return 'opendocument';
+      return 'unknown';
+    }
+
+    // Parse Office Open XML (DOCX, XLSX, PPTX)
+    async function parseOOXML(blob, type){
+      try{
+        const zip = await JSZip.loadAsync(blob);
+        const metadata = { type: type, source: 'ooxml', files: Object.keys(zip.files) };
+        
+        // Core properties (docProps/core.xml)
+        const coreXml = await zip.file('docProps/core.xml')?.async('string');
+        if(coreXml){
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(coreXml, 'application/xml');
+          
+          const getText = (tag) => {
+            const el = doc.getElementsByTagName(tag)[0] || doc.getElementsByTagNameNS('*', tag)[0];
+            return el?.textContent || null;
+          };
+          
+          metadata.creator = getText('dc:creator') || getText('creator');
+          metadata.lastModifiedBy = getText('cp:lastModifiedBy') || getText('lastModifiedBy');
+          metadata.created = getText('dcterms:created') || getText('created') || getText('CreationDate');
+          metadata.modified = getText('dcterms:modified') || getText('modified') || getText('ModificationDate');
+          metadata.title = getText('dc:title') || getText('title');
+          metadata.subject = getText('cp:subject') || getText('subject');
+          metadata.description = getText('dc:description') || getText('description');
+          metadata.keywords = getText('cp:keywords') || getText('keywords');
+          metadata.category = getText('cp:category') || getText('category');
+          metadata.version = getText('cp:version') || getText('version');
+          metadata.revision = getText('cp:revision') || getText('revision');
+        }
+        
+        // Extended properties (docProps/app.xml)
+        const appXml = await zip.file('docProps/app.xml')?.async('string');
+        if(appXml){
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(appXml, 'application/xml');
+          
+          const getText = (tag) => {
+            const el = doc.getElementsByTagName(tag)[0] || doc.getElementsByTagNameNS('*', tag)[0];
+            return el?.textContent || null;
+          };
+          
+          metadata.application = getText('Application') || getText('Template');
+          metadata.appVersion = getText('AppVersion');
+          metadata.company = getText('Company');
+          metadata.manager = getText('Manager');
+          metadata.pages = getText('Pages') || getText('Slides') || getText('SheetTitle');
+          metadata.words = getText('Words');
+          metadata.characters = getText('Characters') || getText('CharactersWithSpaces');
+          metadata.totalTime = getText('TotalTime');
+        }
+        
+        // Try to get custom properties
+        const customXml = await zip.file('docProps/custom.xml')?.async('string');
+        if(customXml){
+          metadata.hasCustomProperties = true;
+        }
+        
+        return metadata;
+      }catch(e){
+        console.error('OOXML parse error:', e);
+        return { type: type, error: e.message };
+      }
+    }
+
+    // Parse OpenDocument (ODT, ODS, ODP)
+    async function parseOpenDocument(blob, type){
+      try{
+        const zip = await JSZip.loadAsync(blob);
+        const metadata = { type: type, source: 'opendocument', files: Object.keys(zip.files) };
+        
+        // meta.xml contains metadata
+        const metaXml = await zip.file('meta.xml')?.async('string');
+        if(metaXml){
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(metaXml, 'application/xml');
+          
+          const getText = (tag, ns) => {
+            const els = doc.getElementsByTagNameNS(ns || '*', tag);
+            return els[0]?.textContent || null;
+          };
+          
+          const officeNs = 'urn:oasis:names:tc:opendocument:xmlns:office:1.0';
+          const dcNs = 'http://purl.org/dc/elements/1.1/';
+          const metaNs = 'urn:oasis:names:tc:opendocument:xmlns:meta:1.0';
+          
+          metadata.generator = getText('generator', officeNs);
+          metadata.title = getText('title', dcNs);
+          metadata.description = getText('description', dcNs);
+          metadata.subject = getText('subject', dcNs);
+          metadata.creator = getText('creator', dcNs);
+          metadata.creationDate = getText('creation-date', metaNs);
+          metadata.modificationDate = getText('modification-date', metaNs) || getText('date', dcNs);
+          metadata.printDate = getText('print-date', metaNs);
+          metadata.template = getText('template', metaNs);
+          metadata.autoReload = getText('auto-reload', metaNs);
+          metadata.hyperlinkBehavior = getText('hyperlink-behaviour', metaNs);
+          metadata.language = getText('language', dcNs);
+          
+          // Statistics
+          const edCount = doc.getElementsByTagNameNS(metaNs, 'editing-cycles')[0];
+          if(edCount) metadata.editingCycles = edCount.textContent;
+          
+          const edDuration = doc.getElementsByTagNameNS(metaNs, 'editing-duration')[0];
+          if(edDuration) metadata.editingDuration = edDuration.textContent;
+          
+          // User defined metadata
+          const userDefined = doc.getElementsByTagNameNS(metaNs, 'user-defined');
+          if(userDefined.length > 0){
+            metadata.userDefined = [];
+            for(let ud of userDefined){
+              const name = ud.getAttributeNS(metaNs, 'name');
+              metadata.userDefined.push({name, value: ud.textContent});
+            }
+          }
+        }
+        
+        return metadata;
+      }catch(e){
+        console.error('OpenDocument parse error:', e);
+        return { type: type, error: e.message };
+      }
+    }
+
+    // Parse PDF metadata
+    async function parsePDF(blob){
+      try{
+        const arrayBuffer = await blob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const text = new TextDecoder('latin1').decode(uint8Array);
+        
+        const metadata = { type: 'pdf', source: 'pdf-parser' };
+        
+        // Extract PDF version
+        const versionMatch = text.match(/^%PDF-(\d\.\d)/);
+        if(versionMatch) metadata.pdfVersion = versionMatch[1];
+        
+        // Extract /Info dictionary entries
+        const infoPatterns = {
+          title: /\/Title\s*\(([^)]+)\)/i,
+          author: /\/Author\s*\(([^)]+)\)/i,
+          subject: /\/Subject\s*\(([^)]+)\)/i,
+          keywords: /\/Keywords\s*\(([^)]+)\)/i,
+          creator: /\/Creator\s*\(([^)]+)\)/i,
+          producer: /\/Producer\s*\(([^)]+)\)/i,
+          creationDate: /\/CreationDate\s*\(([^)]+)\)/i,
+          modDate: /\/ModDate\s*\(([^)]+)\)/i,
+          trapped: /\/Trapped\s*\/([A-Za-z]+)/i
+        };
+        
+        Object.entries(infoPatterns).forEach(([key, pattern]) => {
+          const match = text.match(pattern);
+          if(match) metadata[key] = match[1];
+        });
+        
+        // Parse PDF dates (D:YYYYMMDDHHmmSS format)
+        function parsePDFDate(dateStr){
+          if(!dateStr) return null;
+          const match = dateStr.match(/D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+          if(match){
+            return `${match[1]}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+          }
+          return dateStr;
+        }
+        
+        if(metadata.creationDate) metadata.creationDateParsed = parsePDFDate(metadata.creationDate);
+        if(metadata.modDate) metadata.modDateParsed = parsePDFDate(metadata.modDate);
+        
+        // Extract XMP metadata if present
+        const xmpMatch = text.match(/<\?xpacket begin.*?<\?xpacket end.*?\?>/s);
+        if(xmpMatch){
+          metadata.hasXMP = true;
+          metadata.xmpRaw = xmpMatch[0].substring(0, 500) + '...';
+        }
+        
+        // Count pages (approximate)
+        const pageMatches = text.match(/\/Type\s*\/Page[^s]/g);
+        if(pageMatches) metadata.pageCount = pageMatches.length;
+        
+        // Check for encryption
+        if(text.includes('/Encrypt')) metadata.isEncrypted = true;
+        
+        // Extract embedded files
+        const embeddedMatch = text.match(/\/EmbeddedFiles/i);
+        if(embeddedMatch) metadata.hasEmbeddedFiles = true;
+        
+        return metadata;
+      }catch(e){
+        console.error('PDF parse error:', e);
+        return { type: 'pdf', error: e.message };
+      }
+    }
+
+    // Main render function
+    function renderMetadata(metadata, file){
+      currentMetadata = metadata;
+      fileType = metadata.type;
+      
+      // Update badge
+      docTypeBadge.textContent = metadata.type?.toUpperCase() || 'UNKNOWN';
+      docTypeBadge.style.display = 'inline-block';
+      
+      // Route to appropriate renderer
+      if(metadata.type === 'image'){
+        renderImageMetadata(metadata, file);
+      } else if(metadata.type === 'pdf'){
+        renderPDFMetadata(metadata, file);
+      } else if(['word','excel','powerpoint'].includes(metadata.type)){
+        renderOOXMLMetadata(metadata, file);
+      } else if(['opendocument'].includes(metadata.type)){
+        renderOpenDocumentMetadata(metadata, file);
+      }
+    }
+
+    function renderImageMetadata(metadata, file){
+      renderSummary(metadata.exif, file);
+      renderFileInfo(file, metadata.imageData);
+      renderCamera(metadata.exif);
+      renderDateTime(metadata.exif);
+      renderSoftware(metadata.exif);
+      renderAuthor(metadata.exif);
+      renderAllTags(metadata.exif);
+      renderGPS(metadata.exif);
+    }
+
+    function renderPDFMetadata(metadata, file){
+      // Summary
+      const tbody = document.querySelector('#summary-table tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['Document Type', 'PDF Document'],
+        ['File Name', file.name],
+        ['File Size', formatBytes(file.size)],
+        ['PDF Version', metadata.pdfVersion || '—'],
+        ['Pages', metadata.pageCount || '—'],
+        ['Title', metadata.title || '—'],
+        ['Author', metadata.author || '—'],
+        ['Created', metadata.creationDateParsed || metadata.creationDate || '—'],
+        ['Modified', metadata.modDateParsed || metadata.modDate || '—'],
+        ['Creator Software', metadata.creator || '—'],
+        ['Producer', metadata.producer || '—'],
+        ['Encrypted', metadata.isEncrypted ? 'Yes ⚠️' : 'No'],
+        ['Has Embedded Files', metadata.hasEmbeddedFiles ? 'Yes' : 'No'],
+        ['Has XMP', metadata.hasXMP ? 'Yes' : 'No']
+      ];
+      rows.forEach(([k,v])=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)||'—'}</td>`;
+        tbody.appendChild(tr);
+      });
+
+      // File Info
+      renderFileInfo(file, null);
+      document.getElementById('fi-ext').textContent = getFileExtension(file.name).toUpperCase();
+
+      // Camera/Origin - PDF specific
+      const camBody = document.querySelector('#camera-table tbody');
+      camBody.innerHTML = '';
+      const camRows = [
+        ['Producer', metadata.producer],
+        ['Creator Tool', metadata.creator],
+        ['PDF Version', metadata.pdfVersion],
+        ['Trapped', metadata.trapped]
+      ];
+      camRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          camBody.appendChild(tr);
+        }
+      });
+      if(!camBody.innerHTML) camBody.innerHTML = '<tr><td colspan="2" class="small">No origin information</td></tr>';
+
+      document.querySelector('#lens-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not applicable for PDF</td></tr>';
+      document.querySelector('#shooting-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not applicable for PDF</td></tr>';
+
+      // Date/Time
+      const dtBody = document.querySelector('#datetime-table tbody');
+      dtBody.innerHTML = '';
+      const dtRows = [
+        ['Creation Date', metadata.creationDateParsed || metadata.creationDate],
+        ['Modification Date', metadata.modDateParsed || metadata.modDate],
+        ['Raw Creation', metadata.creationDate],
+        ['Raw Modified', metadata.modDate]
+      ];
+      dtRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          dtBody.appendChild(tr);
+        }
+      });
+      if(!dtBody.innerHTML) dtBody.innerHTML = '<tr><td colspan="2" class="small">No date information</td></tr>';
+
+      // Timezone analysis
+      const tzDiv = document.getElementById('timezone-analysis');
+      tzDiv.innerHTML = 'PDF dates are in local time unless specified. Creation: ' + (metadata.creationDateParsed || 'N/A') + '<br>Modified: ' + (metadata.modDateParsed || 'N/A');
+
+      // Timeline
+      const timelineDiv = document.getElementById('timeline-container');
+      let timelineHtml = '';
+      if(metadata.creationDate) timelineHtml += `<div class="history-item"><strong>Created:</strong> ${metadata.creationDateParsed || metadata.creationDate}</div>`;
+      if(metadata.modDate) timelineHtml += `<div class="history-item"><strong>Modified:</strong> ${metadata.modDateParsed || metadata.modDate}</div>`;
+      timelineDiv.innerHTML = timelineHtml || '<div class="small">No timeline data</div>';
+
+      // Software
+      const swDiv = document.getElementById('software-history');
+      let swHtml = '';
+      if(metadata.creator) swHtml += `<div class="history-item"><strong>Creator:</strong> ${metadata.creator}</div>`;
+      if(metadata.producer) swHtml += `<div class="history-item"><strong>Producer:</strong> ${metadata.producer}</div>`;
+      swDiv.innerHTML = swHtml || '<div class="small">No software history</div>';
+
+      const swBody = document.querySelector('#software-table tbody');
+      swBody.innerHTML = '';
+      const swRows = [
+        ['Creator', metadata.creator],
+        ['Producer', metadata.producer],
+        ['PDF Version', metadata.pdfVersion],
+        ['Has XMP', metadata.hasXMP ? 'Yes' : 'No'],
+        ['Encrypted', metadata.isEncrypted ? 'Yes' : 'No']
+      ];
+      swRows.forEach(([k,v])=>{
+        if(v !== null && v !== undefined){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          swBody.appendChild(tr);
+        }
+      });
+
+      document.querySelector('#version-table tbody').innerHTML = '<tr><td colspan="2" class="small">See Software tab for version info</td></tr>';
+
+      // Author
+      const authBody = document.querySelector('#author-table tbody');
+      authBody.innerHTML = '';
+      const authRows = [
+        ['Author', metadata.author],
+        ['Title', metadata.title],
+        ['Subject', metadata.subject]
+      ];
+      authRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          authBody.appendChild(tr);
+        }
+      });
+      if(!authBody.innerHTML) authBody.innerHTML = '<tr><td colspan="2" class="small">No author information</td></tr>';
+
+      document.querySelector('#contact-table tbody').innerHTML = '<tr><td colspan="2" class="small">No contact information in PDF</td></tr>';
+      document.querySelector('#rights-table tbody').innerHTML = '<tr><td colspan="2" class="small">No rights information</td></tr>';
+      document.querySelector('#org-table tbody').innerHTML = '<tr><td colspan="2" class="small">No organizational info</td></tr>';
+
+      // All tags
+      renderAllTags(metadata);
+
+      // No GPS for PDFs in this view
+      latEl.textContent = '—'; lonEl.textContent = '—';
+      marker.setLatLng([0,0]); map.setView([0,0],2);
+      gmaps.href = '#'; gmaps.textContent = 'N/A';
+      addrEl.textContent = 'GPS not available for PDFs';
+    }
+
+    function renderOOXMLMetadata(metadata, file){
+      // Similar structure to PDF but with OOXML-specific fields
+      // Summary
+      const tbody = document.querySelector('#summary-table tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['Document Type', metadata.type === 'word' ? 'Microsoft Word' : metadata.type === 'excel' ? 'Microsoft Excel' : 'Microsoft PowerPoint'],
+        ['File Name', file.name],
+        ['File Size', formatBytes(file.size)],
+        ['Title', metadata.title || '—'],
+        ['Author', metadata.creator || '—'],
+        ['Created', metadata.created || '—'],
+        ['Modified', metadata.modified || '—'],
+        ['Last Modified By', metadata.lastModifiedBy || '—'],
+        ['Application', metadata.application || '—'],
+        ['Company', metadata.company || '—'],
+        ['Pages/Sheets/Slides', metadata.pages || '—'],
+        ['Words', metadata.words || '—'],
+        ['Characters', metadata.characters || '—'],
+        ['Has Custom Properties', metadata.hasCustomProperties ? 'Yes' : 'No']
+      ];
+      rows.forEach(([k,v])=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)||'—'}</td>`;
+        tbody.appendChild(tr);
+      });
+
+      // File Info
+      renderFileInfo(file, null);
+      document.getElementById('fi-ext').textContent = getFileExtension(file.name).toUpperCase();
+
+      // Camera/Origin
+      const camBody = document.querySelector('#camera-table tbody');
+      camBody.innerHTML = '';
+      const camRows = [
+        ['Application', metadata.application],
+        ['App Version', metadata.appVersion],
+        ['Template', metadata.template],
+        ['Company', metadata.company],
+        ['Manager', metadata.manager]
+      ];
+      camRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          camBody.appendChild(tr);
+        }
+      });
+      if(!camBody.innerHTML) camBody.innerHTML = '<tr><td colspan="2" class="small">No origin information</td></tr>';
+
+      document.querySelector('#lens-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not applicable for Office documents</td></tr>';
+      document.querySelector('#shooting-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not applicable for Office documents</td></tr>';
+
+      // Date/Time
+      const dtBody = document.querySelector('#datetime-table tbody');
+      dtBody.innerHTML = '';
+      const dtRows = [
+        ['Created', metadata.created],
+        ['Modified', metadata.modified],
+        ['Print Date', metadata.printDate],
+        ['Total Editing Time', metadata.totalTime || metadata.editingDuration]
+      ];
+      dtRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          dtBody.appendChild(tr);
+        }
+      });
+      if(!dtBody.innerHTML) dtBody.innerHTML = '<tr><td colspan="2" class="small">No date information</td></tr>';
+
+      // Timezone analysis
+      const tzDiv = document.getElementById('timezone-analysis');
+      tzDiv.innerHTML = `Created: ${metadata.created || 'N/A'}<br>Modified: ${metadata.modified || 'N/A'}<br>Editing Cycles: ${metadata.editingCycles || 'N/A'}`;
+
+      // Timeline
+      const timelineDiv = document.getElementById('timeline-container');
+      let timelineHtml = '';
+      if(metadata.created) timelineHtml += `<div class="history-item"><strong>Created:</strong> ${metadata.created}</div>`;
+      if(metadata.modified) timelineHtml += `<div class="history-item"><strong>Modified:</strong> ${metadata.modified}</div>`;
+      if(metadata.lastModifiedBy) timelineHtml += `<div class="history-item"><strong>Last Modified By:</strong> ${metadata.lastModifiedBy}</div>`;
+      if(metadata.printDate) timelineHtml += `<div class="history-item"><strong>Printed:</strong> ${metadata.printDate}</div>`;
+      timelineDiv.innerHTML = timelineHtml || '<div class="small">No timeline data</div>';
+
+      // Software
+      const swDiv = document.getElementById('software-history');
+      let swHtml = '';
+      if(metadata.application) swHtml += `<div class="history-item"><strong>Application:</strong> ${metadata.application}</div>`;
+      if(metadata.appVersion) swHtml += `<div class="history-item"><strong>App Version:</strong> ${metadata.appVersion}</div>`;
+      if(metadata.template) swHtml += `<div class="history-item"><strong>Template:</strong> ${metadata.template}</div>`;
+      swDiv.innerHTML = swHtml || '<div class="small">No software history</div>';
+
+      const swBody = document.querySelector('#software-table tbody');
+      swBody.innerHTML = '';
+      const swRows = [
+        ['Application', metadata.application],
+        ['App Version', metadata.appVersion],
+        ['Template', metadata.template],
+        ['Total Time', metadata.totalTime],
+        ['Editing Cycles', metadata.editingCycles],
+        ['Editing Duration', metadata.editingDuration],
+        ['Has Custom Properties', metadata.hasCustomProperties ? 'Yes' : 'No']
+      ];
+      swRows.forEach(([k,v])=>{
+        if(v !== null && v !== undefined){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          swBody.appendChild(tr);
+        }
+      });
+
+      document.querySelector('#version-table tbody').innerHTML = '<tr><td colspan="2" class="small">See Software History tab</td></tr>';
+
+      // Author
+      const authBody = document.querySelector('#author-table tbody');
+      authBody.innerHTML = '';
+      const authRows = [
+        ['Creator', metadata.creator],
+        ['Last Modified By', metadata.lastModifiedBy],
+        ['Manager', metadata.manager]
+      ];
+      authRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          authBody.appendChild(tr);
+        }
+      });
+      if(!authBody.innerHTML) authBody.innerHTML = '<tr><td colspan="2" class="small">No author information</td></tr>';
+
+      const contactBody = document.querySelector('#contact-table tbody');
+      contactBody.innerHTML = '';
+      const contactRows = [
+        ['Company', metadata.company]
+      ];
+      contactRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          contactBody.appendChild(tr);
+        }
+      });
+      if(!contactBody.innerHTML) contactBody.innerHTML = '<tr><td colspan="2" class="small">No contact information</td></tr>';
+
+      const rightsBody = document.querySelector('#rights-table tbody');
+      rightsBody.innerHTML = '';
+      const rightsRows = [
+        ['Subject', metadata.subject],
+        ['Keywords', metadata.keywords],
+        ['Category', metadata.category]
+      ];
+      rightsRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          rightsBody.appendChild(tr);
+        }
+      });
+      if(!rightsBody.innerHTML) rightsBody.innerHTML = '<tr><td colspan="2" class="small">No rights information</td></tr>';
+
+      const orgBody = document.querySelector('#org-table tbody');
+      orgBody.innerHTML = '';
+      const orgRows = [
+        ['Company', metadata.company],
+        ['Manager', metadata.manager],
+        ['Pages/Slides', metadata.pages],
+        ['Words', metadata.words],
+        ['Characters', metadata.characters]
+      ];
+      orgRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          orgBody.appendChild(tr);
+        }
+      });
+      if(!orgBody.innerHTML) orgBody.innerHTML = '<tr><td colspan="2" class="small">No organizational info</td></tr>';
+
+      // All tags
+      renderAllTags(metadata);
+
+      // No GPS for Office docs
+      latEl.textContent = '—'; lonEl.textContent = '—';
+      marker.setLatLng([0,0]); map.setView([0,0],2);
+      gmaps.href = '#'; gmaps.textContent = 'N/A';
+      addrEl.textContent = 'GPS not available for Office documents';
+    }
+
+    function renderOpenDocumentMetadata(metadata, file){
+      // Similar to OOXML but with ODF-specific fields
+      renderOOXMLMetadata(metadata, file); // Reuse most logic
+      
+      // Override specific fields
+      const tbody = document.querySelector('#summary-table tbody');
+      const typeName = file.name.endsWith('.odt') ? 'OpenDocument Text' : 
+                       file.name.endsWith('.ods') ? 'OpenDocument Spreadsheet' : 
+                       file.name.endsWith('.odp') ? 'OpenDocument Presentation' : 'OpenDocument';
+      
+      // Update first row
+      tbody.rows[0].cells[1].textContent = typeName;
+      
+      // Add generator info
+      if(metadata.generator){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="key">Generator</td><td>${escapeHtml(metadata.generator)}</td>`;
+        tbody.appendChild(tr);
+      }
+      
+      // Update software history
+      const swDiv = document.getElementById('software-history');
+      if(metadata.generator){
+        swDiv.innerHTML = `<div class="history-item"><strong>Generator:</strong> ${metadata.generator}</div>`;
+      }
+    }
+
+    // Parse CSV/Text files
+    async function parseTextFile(file, type){
+      try{
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter(line => line.trim());
+        
+        const metadata = {
+          type: type,
+          source: 'text-parser',
+          lineCount: lines.length,
+          charCount: text.length,
+          size: file.size,
+          firstLines: lines.slice(0, 5)
+        };
+        
+        if(type === 'csv' && lines.length > 0){
+          const delimiter = lines[0].includes('\t') ? 'tab' : lines[0].includes(';') ? 'semicolon' : 'comma';
+          metadata.delimiter = delimiter;
+          const headers = lines[0].split(delimiter === 'tab' ? '\t' : delimiter === 'semicolon' ? ';' : ',');
+          metadata.columnCount = headers.length;
+          metadata.columns = headers.map(h => h.trim().replace(/^["']|["']$/g, ''));
+          metadata.rowCount = lines.length - 1;
+        }
+        
+        return metadata;
+      }catch(e){
+        console.error('Text parse error:', e);
+        return { type: type, error: e.message };
+      }
+    }
+
+    // Render CSV/Text metadata
+    function renderTextFileMetadata(metadata, file){
+      const typeLabel = metadata.type === 'csv' ? 'CSV File' : 'Plain Text';
+      
+      // Summary
+      const tbody = document.querySelector('#summary-table tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['Document Type', typeLabel],
+        ['File Name', file.name],
+        ['File Size', formatBytes(file.size)],
+        ['Lines', metadata.lineCount?.toLocaleString() || '—'],
+        ['Characters', metadata.charCount?.toLocaleString() || '—'],
+        ['Folder/Source', getFilePathInfo(file).folder],
+        ['Note', 'CSV/Text files do not contain embedded metadata like Office documents']
+      ];
+      
+      if(metadata.type === 'csv'){
+        rows.splice(5, 0, ['Delimiter', metadata.delimiter || 'comma']);
+        rows.splice(6, 0, ['Columns', metadata.columnCount || '—']);
+        rows.splice(7, 0, ['Data Rows', metadata.rowCount?.toLocaleString() || '—']);
+      }
+      
+      rows.forEach(([k,v])=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)||'—'}</td>`;
+        tbody.appendChild(tr);
+      });
+      
+      // Camera/Origin
+      document.querySelector('#camera-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not applicable for text files</td></tr>';
+      document.querySelector('#lens-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not applicable for text files</td></tr>';
+      
+      const shootBody = document.querySelector('#shooting-table tbody');
+      shootBody.innerHTML = '';
+      const propRows = [
+        ['Line Count', metadata.lineCount],
+        ['Character Count', metadata.charCount],
+        ['File Size', formatBytes(metadata.size)]
+      ];
+      if(metadata.type === 'csv'){
+        propRows.push(['Delimiter', metadata.delimiter]);
+        propRows.push(['Column Count', metadata.columnCount]);
+        propRows.push(['Row Count', metadata.rowCount]);
+      }
+      propRows.forEach(([k,v])=>{
+        if(v !== undefined){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          shootBody.appendChild(tr);
+        }
+      });
+      
+      // Date/Time
+      document.querySelector('#datetime-table tbody').innerHTML = '<tr><td colspan="2" class="small">Text files do not contain embedded timestamps. Check File Info tab for filesystem dates.</td></tr>';
+      document.getElementById('timezone-analysis').textContent = 'Text files do not contain timezone information.';
+      document.getElementById('timeline-container').innerHTML = '<div class="small">No timeline data in text files</div>';
+      
+      // Software
+      document.getElementById('software-history').innerHTML = '<div class="small">Text files do not track software history</div>';
+      document.querySelector('#software-table tbody').innerHTML = '<tr><td colspan="2" class="small">No software information</td></tr>';
+      document.querySelector('#version-table tbody').innerHTML = '<tr><td colspan="2" class="small">No version information</td></tr>';
+      
+      // Author
+      document.querySelector('#author-table tbody').innerHTML = '<tr><td colspan="2" class="small">Text files do not contain author metadata</td></tr>';
+      document.querySelector('#contact-table tbody').innerHTML = '<tr><td colspan="2" class="small">No contact information</td></tr>';
+      document.querySelector('#rights-table tbody').innerHTML = '<tr><td colspan="2" class="small">No rights information</td></tr>';
+      document.querySelector('#org-table tbody').innerHTML = '<tr><td colspan="2" class="small">No organizational info</td></tr>';
+      
+      // All Metadata
+      let html = '<div class="tag-group"><div class="tag-group-title">File Structure</div><table>';
+      Object.entries(metadata).forEach(([key, value]) => {
+        if(key === 'firstLines' || key === 'columns') return;
+        const valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        html += `<tr><td class="tag-name">${escapeHtml(key)}</td><td class="tag-value">${escapeHtml(valStr)}</td></tr>`;
+      });
+      html += '</table></div>';
+      
+      if(metadata.columns){
+        html += `<div class="tag-group"><div class="tag-group-title">Columns (${metadata.columns.length})</div><table>`;
+        metadata.columns.forEach((col, i) => {
+          html += `<tr><td class="tag-name">${i+1}</td><td class="tag-value">${escapeHtml(col)}</td></tr>`;
+        });
+        html += '</table></div>';
+      }
+      
+      if(metadata.firstLines){
+        html += `<div class="tag-group"><div class="tag-group-title">First Lines Preview</div><table>`;
+        metadata.firstLines.forEach((line, i) => {
+          html += `<tr><td class="tag-name">${i+1}</td><td class="tag-value" style="font-family:monospace;font-size:11px">${escapeHtml(line.substring(0, 100))}${line.length > 100 ? '...' : ''}</td></tr>`;
+        });
+        html += '</table></div>';
+      }
+      
+      allTagsContainer.innerHTML = html;
+      
+      // GPS
+      latEl.textContent = '—'; lonEl.textContent = '—';
+      marker.setLatLng([0,0]); map.setView([0,0],2);
+      gmaps.href = '#'; gmaps.textContent = 'N/A';
+      addrEl.textContent = 'GPS not available for text files';
+      
+      setStatus(`${typeLabel} - No embedded metadata (filesystem info only)`);
+    }
+
+    // Render unknown file type
+    function renderUnknownFileType(file){
+      // Summary
+      const tbody = document.querySelector('#summary-table tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['Document Type', 'Unknown / Unsupported'],
+        ['File Name', file.name],
+        ['File Size', formatBytes(file.size)],
+        ['File Type (MIME)', file.type || 'Unknown'],
+        ['Last Modified', formatDate(file.lastModified)],
+        ['Folder/Source', getFilePathInfo(file).folder],
+        ['Note', 'This file type does not contain parseable embedded metadata']
+      ];
+      rows.forEach(([k,v])=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)||'—'}</td>`;
+        tbody.appendChild(tr);
+      });
+      
+      // Clear other tabs
+      document.querySelector('#camera-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not available for this file type</td></tr>';
+      document.querySelector('#lens-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not available</td></tr>';
+      document.querySelector('#shooting-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not available</td></tr>';
+      document.querySelector('#datetime-table tbody').innerHTML = '<tr><td colspan="2" class="small">Not available</td></tr>';
+      document.getElementById('timezone-analysis').textContent = 'No timezone information available';
+      document.getElementById('timeline-container').innerHTML = '<div class="small">No timeline data</div>';
+      document.getElementById('software-history').innerHTML = '<div class="small">No software history</div>';
+      document.querySelector('#software-table tbody').innerHTML = '<tr><td colspan="2" class="small">No software information</td></tr>';
+      document.querySelector('#version-table tbody').innerHTML = '<tr><td colspan="2" class="small">No version information</td></tr>';
+      document.querySelector('#author-table tbody').innerHTML = '<tr><td colspan="2" class="small">No author information</td></tr>';
+      document.querySelector('#contact-table tbody').innerHTML = '<tr><td colspan="2" class="small">No contact information</td></tr>';
+      document.querySelector('#rights-table tbody').innerHTML = '<tr><td colspan="2" class="small">No rights information</td></tr>';
+      document.querySelector('#org-table tbody').innerHTML = '<tr><td colspan="2" class="small">No organizational info</td></tr>';
+      
+      allTagsContainer.innerHTML = '<div class="small">This file type does not contain parseable embedded metadata. Only filesystem information is available in the File Info tab.</div>';
+      
+      // GPS
+      latEl.textContent = '—'; lonEl.textContent = '—';
+      marker.setLatLng([0,0]); map.setView([0,0],2);
+      gmaps.href = '#'; gmaps.textContent = 'N/A';
+      addrEl.textContent = 'GPS not available';
+    }
+
+    // Render functions
+    function renderSummary(exif, fileInfo){
+      const tbody = document.querySelector('#summary-table tbody');
+      tbody.innerHTML = '';
+      
+      const rows = [
+        ['Status', exif ? 'Metadata found' : 'No metadata'],
+        ['File Name', fileInfo.name],
+        ['File Size', formatBytes(fileInfo.size)],
+        ['Folder/Source', fileInfo.folder],
+        ['Camera', ((exif?.Make)||'') + ' ' + ((exif?.Model)||'')],
+        ['Date Taken', exif?.DateTimeOriginal || exif?.DateTime || exif?.DateTimeDigitized || '—'],
+        ['Software', exif?.Software || '—'],
+        ['Has GPS', (exif?.GPSLatitude ? 'Yes ✓' : 'No')],
+        ['Author', exif?.Artist || exif?.Author || exif?.Creator || '—'],
+        ['Copyright', exif?.Copyright || '—']
+      ];
+      
+      rows.forEach(([k,v])=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)||'—'}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderFileInfo(file, imgData){
+      const pathInfo = getFilePathInfo(file);
+      document.getElementById('fi-name').textContent = pathInfo.name;
+      document.getElementById('fi-size').textContent = formatBytes(file.size);
+      document.getElementById('fi-type').textContent = file.type || 'Unknown';
+      document.getElementById('fi-modified').textContent = formatDate(file.lastModified);
+      document.getElementById('fi-path').textContent = pathInfo.folder;
+      document.getElementById('fi-ext').textContent = pathInfo.ext.toUpperCase();
+      
+      // Image properties
+      const tbody = document.querySelector('#image-props-table tbody');
+      tbody.innerHTML = '';
+      if(imgData){
+        const rows = [
+          ['Width', imgData.width + ' px'],
+          ['Height', imgData.height + ' px'],
+          ['Aspect Ratio', (imgData.width / imgData.height).toFixed(3)],
+          ['Megapixels', ((imgData.width * imgData.height) / 1000000).toFixed(2) + ' MP'],
+          ['Color Depth', '24-bit (estimated)']
+        ];
+        rows.forEach(([k,v])=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${v}</td>`;
+          tbody.appendChild(tr);
+        });
+      } else {
+        tbody.innerHTML = '<tr><td colspan="2" class="small">No image properties (document file)</td></tr>';
+      }
+    }
+
+    function renderCamera(exif){
+      // Camera info
+      const camBody = document.querySelector('#camera-table tbody');
+      camBody.innerHTML = '';
+      const camRows = [
+        ['Make', exif?.Make],
+        ['Model', exif?.Model],
+        ['Camera Serial', exif?.SerialNumber || exif?.BodySerialNumber],
+        ['Firmware', exif?.FirmwareVersion || exif?.Firmware],
+        ['Owner Name', exif?.OwnerName || exif?.CameraOwnerName]
+      ];
+      camRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          camBody.appendChild(tr);
+        }
+      });
+      if(!camBody.innerHTML) camBody.innerHTML = '<tr><td colspan="2" class="small">No camera information found</td></tr>';
+
+      // Lens info
+      const lensBody = document.querySelector('#lens-table tbody');
+      lensBody.innerHTML = '';
+      const lensRows = [
+        ['Lens Make', exif?.LensMake],
+        ['Lens Model', exif?.LensModel],
+        ['Lens Serial', exif?.LensSerialNumber],
+        ['Lens Specification', exif?.LensSpecification ? exif.LensSpecification.join(', ') : null],
+        ['Focal Length', exif?.FocalLength ? exif.FocalLength + ' mm' : null],
+        ['35mm Equiv Focal', exif?.FocalLengthIn35mmFilm ? exif.FocalLengthIn35mmFilm + ' mm' : null],
+        ['Max Aperture', exif?.MaxApertureValue ? 'f/' + exif.MaxApertureValue : null]
+      ];
+      lensRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          lensBody.appendChild(tr);
+        }
+      });
+      if(!lensBody.innerHTML) lensBody.innerHTML = '<tr><td colspan="2" class="small">No lens information found</td></tr>';
+
+      // Shooting settings
+      const shootBody = document.querySelector('#shooting-table tbody');
+      shootBody.innerHTML = '';
+      const shootRows = [
+        ['Aperture', exif?.FNumber ? 'f/' + exif.FNumber : null],
+        ['Exposure Time', exif?.ExposureTime ? (exif.ExposureTime < 1 ? '1/' + Math.round(1/exif.ExposureTime) : exif.ExposureTime + 's') : null],
+        ['Exposure Program', exif?.ExposureProgram],
+        ['Exposure Mode', exif?.ExposureMode],
+        ['Exposure Bias', exif?.ExposureBiasValue],
+        ['ISO Speed', exif?.ISOSpeedRatings || exif?.ISO],
+        ['Flash', exif?.Flash],
+        ['White Balance', exif?.WhiteBalance],
+        ['Metering Mode', exif?.MeteringMode],
+        ['Scene Type', exif?.SceneType],
+        ['Scene Capture Type', exif?.SceneCaptureType],
+        ['Contrast', exif?.Contrast],
+        ['Saturation', exif?.Saturation],
+        ['Sharpness', exif?.Sharpness],
+        ['Digital Zoom', exif?.DigitalZoomRatio],
+        ['Orientation', exif?.Orientation]
+      ];
+      shootRows.forEach(([k,v])=>{
+        if(v != null){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          shootBody.appendChild(tr);
+        }
+      });
+      if(!shootBody.innerHTML) shootBody.innerHTML = '<tr><td colspan="2" class="small">No shooting settings found</td></tr>';
+    }
+
+    function renderDateTime(exif){
+      const tbody = document.querySelector('#datetime-table tbody');
+      tbody.innerHTML = '';
+      
+      const dateFields = [
+        ['DateTime', 'File modified'],
+        ['DateTimeOriginal', 'Photo taken ✓'],
+        ['DateTimeDigitized', 'Digitized'],
+        ['DateTimeCreated', 'Created'],
+        ['ModifyDate', 'Modified'],
+        ['CreateDate', 'Created'],
+        ['DateTimeModified', 'Modified'],
+        ['MetadataDate', 'Metadata modified'],
+        ['ProfileDateTime', 'Profile date'],
+        ['DateTimeSent', 'Sent'],
+        ['DateTimeReceived', 'Received'],
+        ['GPSDateStamp', 'GPS Date']
+      ];
+      
+      dateFields.forEach(([field, desc])=>{
+        if(exif?.[field]){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${field}</td><td>${escapeHtml(exif[field])}<span class="small" style="color:var(--accent)"> ${desc}</span></td>`;
+          tbody.appendChild(tr);
+        }
+      });
+      
+      // Also check for any field containing 'Date' or 'Time'
+      Object.keys(exif || {}).forEach(key => {
+        if((key.toLowerCase().includes('date') || key.toLowerCase().includes('time')) && !dateFields.find(([f]) => f === key)){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${key}</td><td>${escapeHtml(exif[key])}</td>`;
+          tbody.appendChild(tr);
+        }
+      });
+      
+      if(!tbody.innerHTML) tbody.innerHTML = '<tr><td colspan="2" class="small">No date/time information found</td></tr>';
+      
+      // Timezone analysis
+      const tzDiv = document.getElementById('timezone-analysis');
+      if(exif){
+        let analysis = [];
+        
+        if(exif.TimeZoneOffset) analysis.push(`Timezone Offset: ${exif.TimeZoneOffset}`);
+        if(exif.OffsetTime) analysis.push(`Offset Time: ${exif.OffsetTime}`);
+        if(exif.OffsetTimeOriginal) analysis.push(`Original Offset: ${exif.OffsetTimeOriginal}`);
+        if(exif.OffsetTimeDigitized) analysis.push(`Digitized Offset: ${exif.OffsetTimeDigitized}`);
+        
+        if(exif.GPSDateStamp || exif.GPSTimeStamp){
+          analysis.push(`GPS Time: ${exif.GPSDateStamp || ''} ${exif.GPSTimeStamp ? exif.GPSTimeStamp.join(':') : ''}`);
+        }
+        
+        const original = exif.DateTimeOriginal || exif.DateTime;
+        const modified = exif.DateTime || exif.ModifyDate;
+        if(original && modified && original !== modified){
+          analysis.push(`<span class="warning">⚠ File has been modified since original creation</span>`);
+        }
+        
+        tzDiv.innerHTML = analysis.length ? analysis.join('<br>') : 'No explicit timezone information found. Dates are typically local to device settings.';
+      } else {
+        tzDiv.textContent = 'Upload a file to analyze timestamps.';
+      }
+      
+      // Timeline
+      const timelineDiv = document.getElementById('timeline-container');
+      if(exif){
+        let timelineHtml = '';
+        const dates = [
+          ['Created', exif.DateTimeCreated || exif.CreateDate],
+          ['Original', exif.DateTimeOriginal],
+          ['Digitized', exif.DateTimeDigitized],
+          ['Modified', exif.DateTimeModified || exif.ModifyDate || exif.DateTime],
+          ['Metadata', exif.MetadataDate]
+        ];
+        dates.forEach(([label, value])=>{
+          if(value) timelineHtml += `<div class="history-item"><strong>${label}:</strong> ${value}</div>`;
+        });
+        timelineDiv.innerHTML = timelineHtml || '<div class="small">No timeline data</div>';
+      } else {
+        timelineDiv.innerHTML = '<div class="small">Upload a file to see timeline</div>';
+      }
+    }
+
+    function renderSoftware(exif){
+      const history = [];
+      
+      if(exif.Software) history.push({type:'Software', value:exif.Software, tag:'Software'});
+      if(exif['ProcessingSoftware']) history.push({type:'Processing Software', value:exif['ProcessingSoftware'], tag:'ProcessingSoftware'});
+      if(exif['CreatorTool']) history.push({type:'Creator Tool', value:exif['CreatorTool'], tag:'CreatorTool'});
+      if(exif['History']) history.push({type:'Edit History', value:exif['History'], tag:'History'});
+      if(exif['ImageHistory']) history.push({type:'Image History', value:exif['ImageHistory'], tag:'ImageHistory'});
+      if(exif['DerivedFrom']) history.push({type:'Derived From', value:exif['DerivedFrom'], tag:'DerivedFrom'});
+      if(exif['DocumentID']) history.push({type:'Document ID', value:exif['DocumentID'], tag:'DocumentID'});
+      if(exif['OriginalDocumentID']) history.push({type:'Original Document ID', value:exif['OriginalDocumentID'], tag:'OriginalDocumentID'});
+      if(exif['ExifVersion']) history.push({type:'EXIF Version', value:exif['ExifVersion'], tag:'ExifVersion'});
+      if(exif['FlashpixVersion']) history.push({type:'Flashpix Version', value:exif['FlashpixVersion'], tag:'FlashpixVersion'});
+      
+      const swDiv = document.getElementById('software-history');
+      swDiv.innerHTML = history.length ? history.map(h => 
+        `<div class="history-item"><strong>${escapeHtml(h.type)}:</strong> ${escapeHtml(h.value)} <span class="small" style="opacity:0.6">(${h.tag})</span></div>`
+      ).join('') : '<div class="small">No software history detected.</div>';
+      
+      const tbody = document.querySelector('#software-table tbody');
+      tbody.innerHTML = '';
+      const rows = [
+        ['Software', exif?.Software],
+        ['Processing Software', exif?.ProcessingSoftware],
+        ['Creator Tool', exif?.CreatorTool],
+        ['Platform', exif?.Platform],
+        ['Host Computer', exif?.HostComputer],
+        ['Image History', exif?.ImageHistory || exif?.History],
+        ['Derived From', exif?.DerivedFrom],
+        ['Document ID', exif?.DocumentID],
+        ['Original Document ID', exif?.OriginalDocumentID],
+        ['Instance ID', exif?.InstanceID],
+        ['Original Instance ID', exif?.OriginalInstanceID],
+        ['Format', exif?.Format],
+        ['Native Digest', exif?.NativeDigest],
+        ['Digest', exif?.Digest]
+      ];
+      
+      rows.forEach(([k,v])=>{
+        if(v != null){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          tbody.appendChild(tr);
+        }
+      });
+      
+      if(!tbody.innerHTML) tbody.innerHTML = '<tr><td colspan="2" class="small">No detailed processing information</td></tr>';
+      
+      // Version table
+      const verBody = document.querySelector('#version-table tbody');
+      verBody.innerHTML = '';
+      const verRows = [
+        ['EXIF Version', exif?.ExifVersion],
+        ['Flashpix Version', exif?.FlashpixVersion],
+        ['Interoperability Version', exif?.InteroperabilityVersion]
+      ];
+      verRows.forEach(([k,v])=>{
+        if(v){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${k}</td><td>${escapeHtml(v)}</td>`;
+          verBody.appendChild(tr);
+        }
+      });
+      if(!verBody.innerHTML) verBody.innerHTML = '<tr><td colspan="2" class="small">No version information</td></tr>';
+    }
+
+    function renderAuthor(exif){
+      const author = {
+        Artist: exif?.Artist,
+        Author: exif?.Author,
+        Creator: exif?.Creator,
+        Writer: exif?.Writer,
+        ByLine: exif?.ByLine,
+        Copyright: exif?.Copyright,
+        CopyrightNotice: exif?.CopyrightNotice,
+        Rights: exif?.Rights,
+        UsageTerms: exif?.UsageTerms,
+        WebStatement: exif?.WebStatement,
+        Licensor: exif?.Licensor,
+        Credit: exif?.Credit,
+        Source: exif?.Source,
+        TransmissionReference: exif?.TransmissionReference,
+        Instructions: exif?.Instructions,
+        Headline: exif?.Headline,
+        Caption: exif?.Caption,
+        Description: exif?.ImageDescription || exif?.Description,
+        Title: exif?.Title,
+        ObjectName: exif?.ObjectName,
+        Keywords: exif?.Keywords,
+        Category: exif?.Category,
+        SupplementalCategories: exif?.SupplementalCategories,
+        City: exif?.City,
+        State: exif?.State || exif?.ProvinceState,
+        Country: exif?.Country || exif?.CountryPrimaryLocationName,
+        Location: exif?.Location,
+        Sublocation: exif?.Sublocation
+      };
+
+      // Author table
+      const authBody = document.querySelector('#author-table tbody');
+      authBody.innerHTML = '';
+      const authFields = ['Artist', 'Author', 'Creator', 'Writer', 'ByLine'];
+      authFields.forEach(field => {
+        if(author[field]){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${field}</td><td>${escapeHtml(author[field])}</td>`;
+          authBody.appendChild(tr);
+        }
+      });
+      if(!authBody.innerHTML) authBody.innerHTML = '<tr><td colspan="2" class="small">No author information found</td></tr>';
+
+      // Contact table
+      const contactBody = document.querySelector('#contact-table tbody');
+      contactBody.innerHTML = '';
+      const contactFields = ['Credit', 'Source', 'Contact', 'City', 'State', 'Country', 'Location'];
+      contactFields.forEach(field => {
+        if(author[field]){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${field}</td><td>${escapeHtml(author[field])}</td>`;
+          contactBody.appendChild(tr);
+        }
+      });
+      if(!contactBody.innerHTML) contactBody.innerHTML = '<tr><td colspan="2" class="small">No contact information found</td></tr>';
+
+      // Rights table
+      const rightsBody = document.querySelector('#rights-table tbody');
+      rightsBody.innerHTML = '';
+      const rightsFields = ['Copyright', 'CopyrightNotice', 'Rights', 'UsageTerms', 'WebStatement', 'Licensor', 'TransmissionReference', 'Instructions', 'Headline', 'Caption', 'Description', 'Title', 'ObjectName', 'Keywords', 'Category', 'SupplementalCategories'];
+      rightsFields.forEach(field => {
+        if(author[field]){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${field}</td><td>${escapeHtml(author[field])}</td>`;
+          rightsBody.appendChild(tr);
+        }
+      });
+      if(!rightsBody.innerHTML) rightsBody.innerHTML = '<tr><td colspan="2" class="small">No rights information found</td></tr>';
+
+      // Org table
+      const orgBody = document.querySelector('#org-table tbody');
+      orgBody.innerHTML = '';
+      const orgFields = ['City', 'State', 'Country', 'Location', 'Sublocation'];
+      orgFields.forEach(field => {
+        if(author[field]){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="key">${field}</td><td>${escapeHtml(author[field])}</td>`;
+          orgBody.appendChild(tr);
+        }
+      });
+      if(!orgBody.innerHTML) orgBody.innerHTML = '<tr><td colspan="2" class="small">No location information</td></tr>';
+    }
+
+    function renderGPS(exif){
+      const lat = exif?.GPSLatitude; const lon = exif?.GPSLongitude;
+      const latRef = exif?.GPSLatitudeRef; const lonRef = exif?.GPSLongitudeRef;
+      const decLat = toDecimal(lat, latRef);
+      const decLon = toDecimal(lon, lonRef);
+
+      if (decLat!=null && decLon!=null) {
+        currentCoords = {lat:decLat, lon:decLon};
+        latEl.textContent = decLat.toFixed(6);
+        lonEl.textContent = decLon.toFixed(6);
+        marker.setLatLng([decLat, decLon]);
+        map.setView([decLat, decLon], 15);
+        gmaps.href = `https://www.google.com/maps/search/?api=1&query=${decLat},${decLon}`;
+        gmaps.textContent = 'open';
+        addrEl.textContent = 'Looking up address…';
+        reverseGeocode(decLat, decLon).then(addr=>{ addrEl.textContent = addr || '—'; }).catch(()=>{ addrEl.textContent='—';});
+      } else {
+        currentCoords = null; addrEl.textContent='—';
+        latEl.textContent = '—'; lonEl.textContent = '—';
+        marker.setLatLng([0,0]); map.setView([0,0],2);
+        gmaps.href = '#'; gmaps.textContent = 'no coords';
+      }
+    }
+
+    function renderAllTags(metadata){
+      if(!metadata || Object.keys(metadata).length === 0){
+        allTagsContainer.innerHTML = '<div class="small">No metadata tags to display.</div>';
+        return;
+      }
+      
+      // For non-image types, just show flat list
+      if(fileType !== 'image'){
+        let html = '<table>';
+        Object.entries(metadata).forEach(([key, value]) => {
+          if(key === 'files' || key === 'xmpRaw') return; // Skip large arrays
+          const valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+          html += `<tr><td class="tag-name">${escapeHtml(key)}</td><td class="tag-value">${escapeHtml(valStr.substring(0, 200))}${valStr.length > 200 ? '...' : ''}</td></tr>`;
+        });
+        html += '</table>';
+        allTagsContainer.innerHTML = html;
+        return;
+      }
+      
+      // Image EXIF - group by category
+      const groups = {
+        'Image': [],
+        'Camera': [],
+        'GPS': [],
+        'Date/Time': [],
+        'Author/Copyright': [],
+        'Software': [],
+        'Other': []
+      };
+      
+      Object.entries(metadata).forEach(([key, value]) => {
+        const valStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        const row = `<tr><td class="tag-name">${key}</td><td class="tag-value">${escapeHtml(valStr.substring(0, 200))}${valStr.length > 200 ? '...' : ''}</td></tr>`;
+        
+        if(key.match(/GPS/i)) groups['GPS'].push(row);
+        else if(key.match(/Date|Time/i)) groups['Date/Time'].push(row);
+        else if(key.match(/Make|Model|Lens|Focal|Exposure|Aperture|ISO|Flash|WhiteBalance|Metering|Scene|Contrast|Saturation|Sharpness|DigitalZoom|Orientation/i)) groups['Camera'].push(row);
+        else if(key.match(/Artist|Author|Creator|Copyright|Credit|Source|Rights|Usage|Licensor|Writer|ByLine|Contact|City|State|Country|Location|Transmission|Instructions|Headline|Caption|Description|Title|ObjectName|Keywords|Category/i)) groups['Author/Copyright'].push(row);
+        else if(key.match(/Software|Processing|CreatorTool|Platform|Host|History|Derived|DocumentID|InstanceID|Format|Digest/i)) groups['Software'].push(row);
+        else if(key.match(/Image|Pixel|Resolution|Compression|ColorSpace|Components|YCbCr|XResolution|YResolution|ResolutionUnit/i)) groups['Image'].push(row);
+        else groups['Other'].push(row);
+      });
+      
+      let html = '';
+      Object.entries(groups).forEach(([name, rows]) => {
+        if(rows.length > 0){
+          html += `<div class="tag-group"><div class="tag-group-title">${name} (${rows.length})</div><table>${rows.join('')}</table></div>`;
+        }
+      });
+      
+      allTagsContainer.innerHTML = html || '<div class="small">No tags to display.</div>';
+    }
+
+    async function reverseGeocode(lat, lon){
+      try{
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+        const resp = await fetch(url, {headers:{'Accept':'application/json'}});
+        if(!resp.ok) return null;
+        const data = await resp.json();
+        return data.display_name || null;
+      }catch(e){ return null; }
+    }
+
+    // Use DataURL + Image to keep EXIF.js happy across browsers
+    async function handleBlob(blob){
+      setStatus('Reading…');
+      const dataUrl = await new Promise((res)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.readAsDataURL(blob); });
+      
+      // Get image dimensions
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = dataUrl;
+      });
+      
+      currentImageData = { width: img.width, height: img.height };
+      
+      // Update preview
+      previewImg.src = dataUrl;
+      previewImg.style.display = 'block';
+      previewDims.textContent = `${img.width} × ${img.height} px`;
+      previewFormat.textContent = currentFile ? currentFile.type || 'Unknown' : 'Unknown';
+      previewType.textContent = 'Image (EXIF)';
+      
+      // Extract EXIF
+      try{
+        EXIF.getData(img, function(){
+          const tags = EXIF.getAllTags(this) || {};
+          currentExif = tags;
+          renderMetadata({type: 'image', exif: tags, imageData: currentImageData}, currentFile);
+        });
+      }catch(err){ 
+        console.error(err); 
+        renderMetadata({type: 'image', exif: null, imageData: currentImageData}, currentFile);
+      }
+    }
+
+    async function ensureJpegBlob(file){
+      const isHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name||'');
+      if (!isHeic) return file;
+      try{
+        setStatus('Converting HEIC → JPEG…');
+        const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
+        return out;
+      }catch(e){ setStatus('HEIC convert failed'); throw e; }
+    }
+
+    async function handleFile(file){ 
+      if(!file) return; 
+      currentFile = file;
+      const type = detectFileType(file);
+      
+      setStatus(`Detected ${type} file, parsing...`);
+      
+      if(type === 'image'){
+        renderFileInfo(file, null);
+        const f = await ensureJpegBlob(file); 
+        handleBlob(f);
+      } else if(type === 'pdf'){
+        const metadata = await parsePDF(file);
+        renderFileInfo(file, null);
+        previewType.textContent = 'PDF Document';
+        renderPDFMetadata(metadata, file);
+      } else if(['word','excel','powerpoint'].includes(type)){
+        const metadata = await parseOOXML(file, type);
+        renderFileInfo(file, null);
+        previewType.textContent = type === 'word' ? 'Microsoft Word' : type === 'excel' ? 'Microsoft Excel' : 'Microsoft PowerPoint';
+        renderOOXMLMetadata(metadata, file);
+      } else if(type === 'opendocument'){
+        const metadata = await parseOpenDocument(file, type);
+        renderFileInfo(file, null);
+        previewType.textContent = 'OpenDocument';
+        renderOpenDocumentMetadata(metadata, file);
+      } else if(type === 'csv'){
+        const metadata = await parseTextFile(file, 'csv');
+        renderFileInfo(file, null);
+        previewType.textContent = 'CSV File';
+        renderTextFileMetadata(metadata, file);
+      } else if(type === 'text'){
+        const metadata = await parseTextFile(file, 'text');
+        renderFileInfo(file, null);
+        previewType.textContent = 'Text File';
+        renderTextFileMetadata(metadata, file);
+      } else {
+        setStatus('File type has no embedded metadata');
+        renderFileInfo(file, null);
+        renderUnknownFileType(file);
+      }
+    }
+
+    // URL loader
+    async function handleUrl(url){
+      try{
+        setStatus('Fetching…');
+        const resp = await fetch(url, {mode:'cors', credentials:'omit'});
+        if(!resp.ok) throw new Error('HTTP '+resp.status);
+        const blob = await resp.blob();
+        const file = new File([blob], url.split('/').pop() || 'remote.file', {type: blob.type});
+        handleFile(file);
+      }catch(e){
+        console.error(e);
+        setStatus('Could not fetch or CORS blocked');
+      }
+    }
+
+    // UI events
+    drop.addEventListener('dragover', e=>{e.preventDefault(); drop.style.borderColor='rgba(255,255,255,0.3)'});
+    drop.addEventListener('dragleave', e=>{e.preventDefault(); drop.style.borderColor='' });
+    drop.addEventListener('drop', e=>{e.preventDefault(); drop.style.borderColor=''; const f=e.dataTransfer.files?.[0]; handleFile(f)});
+    drop.addEventListener('click', ()=>{ fileEl.click(); });
+    fileEl.addEventListener('change', e=>{ handleFile(e.target.files?.[0]); });
+    fetchBtn.addEventListener('click', ()=>{ const u=urlInput.value.trim(); if(u) handleUrl(u); });
+
+    downloadJsonBtn.addEventListener('click', ()=>{
+      if(!currentMetadata && !currentExif) { alert('No metadata to download'); return; }
+      const exportData = {
+        fileInfo: currentFile ? {
+          name: currentFile.name,
+          size: currentFile.size,
+          type: currentFile.type,
+          lastModified: currentFile.lastModified,
+          path: getFilePathInfo(currentFile).folder
+        } : null,
+        fileType: fileType,
+        imageDimensions: currentImageData,
+        metadata: currentMetadata,
+        extractedAt: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(exportData,null,2)],{type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'metadata-export.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    copyBtn.addEventListener('click', ()=>{
+      if(!currentCoords) return alert('No coordinates');
+      navigator.clipboard.writeText(`${currentCoords.lat},${currentCoords.lon}`);
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy', 1500);
+    });
+
+    clearBtn.addEventListener('click', ()=>{
+      setStatus('Waiting for file');
+      addrEl.textContent='—';
+      document.querySelector('#summary-table tbody').innerHTML='<tr><td class="key">Status</td><td>Waiting for file</td></tr>';
+      document.querySelectorAll('#fileinfo tbody, #camera-table tbody, #lens-table tbody, #shooting-table tbody, #datetime-table tbody, #software-table tbody, #author-table tbody, #contact-table tbody, #rights-table tbody, #org-table tbody, #version-table tbody').forEach(t => t.innerHTML = '');
+      document.getElementById('software-history').innerHTML = '<div class="small">No software history detected.</div>';
+      document.getElementById('timezone-analysis').textContent = 'Upload a file to analyze timestamps.';
+      document.getElementById('timeline-container').innerHTML = '<div class="small">Upload a file to see timeline</div>';
+      allTagsContainer.innerHTML = '<div class="small">Upload a file to see all metadata.</div>';
+      latEl.textContent = '—'; lonEl.textContent = '—';
+      marker.setLatLng([0,0]); map.setView([0,0],2);
+      gmaps.href = '#'; gmaps.textContent = 'no coords';
+      currentExif=null; currentCoords=null; currentFile=null; currentImageData=null; currentMetadata=null; fileType=null;
+      previewImg.style.display = 'none';
+      previewImg.src = '';
+      previewDims.textContent = '—';
+      previewFormat.textContent = '—';
+      previewType.textContent = '—';
+      docTypeBadge.style.display = 'none';
+    });
+  </script>
+</body>
+</html>
